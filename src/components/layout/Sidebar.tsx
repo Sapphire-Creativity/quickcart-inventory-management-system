@@ -8,6 +8,9 @@ import {
   LayoutDashboard, Users, Tag, Grid3X3, CreditCard, Bookmark,
   PlusCircle, ImageIcon, List, Star, ShieldCheck, Settings2,
 } from "@/components/icons";
+import { useUser } from '@clerk/nextjs';
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data
@@ -56,8 +59,11 @@ const USER = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Sidebar({ collapsed, onToggle }) {
+  const { user } = useUser();
   const pathname = usePathname();
   const [showSignOut, setShowSignOut] = useState(false)
+
+  console.log(user)
   return (
     <motion.aside
       animate={{ width: collapsed ? 80 : 280 }}
@@ -66,6 +72,8 @@ export function Sidebar({ collapsed, onToggle }) {
     >
 
       <>
+
+
 
 
         {/* Header */}
@@ -202,7 +210,7 @@ export function Sidebar({ collapsed, onToggle }) {
                     {USER.name}
                   </p>
                   <p className="text-xs text-neutral-400 truncate">
-                    {USER.email}
+                    {user?.primaryEmailAddress?.emailAddress}
                   </p>
                 </motion.div>
               )}
@@ -233,10 +241,7 @@ export function Sidebar({ collapsed, onToggle }) {
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-between gap-2 px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-neutral-50 to-neutral-100 text-neutral-700 border border-neutral-200/60 rounded-xl hover:from-neutral-100 hover:to-neutral-200 hover:border-neutral-300 transition-all duration-200 group"
                 >
-                  <span className="flex items-center gap-2">
-                    <ExternalLink size={14} className="text-neutral-400 group-hover:text-neutral-600" />
-                    View Store
-                  </span>
+                   
                   <motion.span
                     whileHover={{ x: 3 }}
                     className="text-[11px] text-neutral-400 group-hover:text-neutral-600"

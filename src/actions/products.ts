@@ -16,6 +16,56 @@ export type ProductDimensions = {
   unit?: "cm" | "in";
 };
 
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  short_description: string | null;
+  slug: string | null;
+  price: number;
+  compare_price: number | null;
+  cost: number | null;
+  sku: string | null;
+  stock: number;
+  track_inventory: boolean;
+  low_stock_alert: number;
+  has_variants: boolean;
+  category_id: string | null;
+  tags: string[];
+  vendor: string | null;
+  product_type: string | null;
+  status: ProductStatus;
+  visibility: ProductVisibility;
+  weight: number | null;
+  dimensions: ProductDimensions | null;
+  shipping_class: ShippingClass;
+  seo_title: string | null;
+  seo_description: string | null;
+  created_at: string;
+  updated_at: string;
+  categories?: { id: string; name: string } | null;
+  product_images?: {
+    id: string;
+    url: string;
+    is_featured: boolean;
+    position: number;
+  }[];
+  variants?: any[];
+  variant_options?: any[];
+  images?: {
+    id: string;
+    url: string;
+    is_featured: boolean;
+    position: number;
+  }[];
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  parent_id: string | null;
+}
+
 export type ProductVariantInput = {
   options: Record<string, string>; // e.g. { color: 'red', size: 'M' }
   price: number;
@@ -188,7 +238,11 @@ export async function getProducts(options: GetProductsOptions = {}) {
 
   let query = supabase
     .from("products")
-    .select("*, categories(name)", { count: "exact" })
+    .select(
+      "*, categories(id, name), product_images(id, url, is_featured, position)",
+      { count: "exact" },
+    )
+    .neq("status", "archived")
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -207,8 +261,6 @@ export async function getProducts(options: GetProductsOptions = {}) {
   }
 
   if (low_stock) {
-    // Supabase JS cannot compare two columns directly.
-    // We use a raw PostgREST filter: stock.lte(low_stock_alert)
     query = query
       .filter("stock", "lte", "low_stock_alert")
       .eq("track_inventory", true);
@@ -411,5 +463,88 @@ export async function adjustStock(
     if (error) return { error: error.message };
   }
 
+  return { error: null };
+}
+
+//  ─────────────────
+
+export async function getCategories() {
+  const supabase = await createServerClient();
+
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, name, parent_id")
+    .order("name");
+
+  if (error) {
+    console.error("[getCategories]", error);
+    return { data: null, error: error.message };
+  }
+
+  return { data: data as Category[], error: null };
+}
+
+export async function replaceProductImages(
+  productId: string,
+  images: { url: string; is_featured: boolean; position: number }[],
+) {
+  const supabase = await createServerClient();
+
+  await supabase.from("product_images").delete().eq("product_id", productId);
+
+  if (images.length > 0) {
+    const { error } = await supabase
+      .from("product_images")
+      .insert(images.map((img) => ({ ...img, product_id: productId })));
+    if (error) {
+      console.error("[replaceProductImages]", error);
+      return { error: error.message };
+    }
+  }
+
+  revalidatePath("/dashboard/products");
+  return { error: null };
+}
+
+export async function replaceProductVariants(
+  productId: string,
+  options: ProductVariantOptionInput[],
+  variants: ProductVariantInput[],
+) {
+  const supabase = await createServerClient();
+
+  await supabase
+    .from("product_variant_options")
+    .delete()
+    .eq("product_id", productId);
+  await supabase.from("product_variants").delete().eq("product_id", productId);
+
+  if (options.length > 0) {
+    const { error } = await supabase.from("product_variant_options").insert(
+      options.map((opt, i) => ({
+        product_id: productId,
+        name: opt.name,
+        values: opt.values,
+        position: opt.position ?? i,
+      })),
+    );
+    if (error) console.error("[replaceProductVariants] options", error);
+  }
+
+  if (variants.length > 0) {
+    const { error } = await supabase.from("product_variants").insert(
+      variants.map((v) => ({
+        product_id: productId,
+        options: v.options,
+        price: v.price,
+        compare_price: v.compare_price ?? null,
+        sku: v.sku ?? null,
+        stock: v.stock,
+      })),
+    );
+    if (error) console.error("[replaceProductVariants] variants", error);
+  }
+
+  revalidatePath("/dashboard/products");
   return { error: null };
 }

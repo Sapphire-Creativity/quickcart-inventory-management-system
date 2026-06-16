@@ -3,9 +3,11 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// ── Types ──────────────────────────────────────────────────
+// ── Types & Interfaces ─────────────────────────────────────
 
-export type CustomerAddress = {
+export type CustomerStatus = 'active' | 'inactive' | 'vip'
+
+export interface CustomerAddress {
   street?: string
   city?: string
   state?: string
@@ -13,7 +15,30 @@ export type CustomerAddress = {
   country?: string
 }
 
-export type CustomerStatus = 'active' | 'inactive' | 'banned'
+export interface Customer {
+  id: string
+  name: string
+  email: string
+  phone: string
+  address?: CustomerAddress
+  status: CustomerStatus
+  notes?: string
+  created_at: string
+  updated_at: string
+  total_orders?: number
+  total_spend?: number
+  last_order_date?: string
+  average_order_value?: number
+}
+
+export interface OrderSummary {
+  id: string
+  order_number: string
+  created_at: string
+  status: string
+  payment_status: string
+  total: number
+}
 
 export type CreateCustomerInput = {
   name: string
@@ -35,38 +60,6 @@ export type GetCustomersOptions = {
 
 // ── Actions ────────────────────────────────────────────────
 
-/**
- * Create a new customer.
- */
-export async function createCustomer(input: CreateCustomerInput) {
-  const supabase = await createServerClient()
-
-  const { data, error } = await supabase
-    .from('customers')
-    .insert({
-      name: input.name,
-      email: input.email ?? null,
-      phone: input.phone,
-      address: input.address ?? null,
-      status: input.status ?? 'active',
-      notes: input.notes ?? null,
-    })
-    .select()
-    .single()
-
-  if (error) {
-    console.error('[createCustomer]', error)
-    return { data: null, error: error.message }
-  }
-
-  revalidatePath('/customers')
-  return { data, error: null }
-}
-
-/**
- * Get a paginated, searchable list of customers.
- * Uses the customer_metrics view so order stats come back in the same query.
- */
 export async function getCustomers(options: GetCustomersOptions = {}) {
   const supabase = await createServerClient()
   const { page = 1, pageSize = 20, search, status } = options
@@ -97,16 +90,13 @@ export async function getCustomers(options: GetCustomersOptions = {}) {
   }
 
   return {
-    data,
+    data: data as Customer[],
     error: null,
     count: count ?? 0,
     totalPages: Math.ceil((count ?? 0) / pageSize),
   }
 }
 
-/**
- * Get a single customer by ID, including their order history.
- */
 export async function getCustomerById(id: string) {
   const supabase = await createServerClient()
 
@@ -132,16 +122,38 @@ export async function getCustomerById(id: string) {
 
   return {
     data: {
-      ...customerResult.data,
-      recent_orders: ordersResult.data ?? [],
+      ...(customerResult.data as Customer),
+      recent_orders: (ordersResult.data ?? []) as OrderSummary[],
     },
     error: null,
   }
 }
 
-/**
- * Update an existing customer.
- */
+export async function createCustomer(input: CreateCustomerInput) {
+  const supabase = await createServerClient()
+
+  const { data, error } = await supabase
+    .from('customers')
+    .insert({
+      name: input.name,
+      email: input.email ?? null,
+      phone: input.phone,
+      address: input.address ?? null,
+      status: input.status ?? 'active',
+      notes: input.notes ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[createCustomer]', error)
+    return { data: null, error: error.message }
+  }
+
+  revalidatePath('/dashboard/customers')
+  return { data: data as Customer, error: null }
+}
+
 export async function updateCustomer(id: string, input: UpdateCustomerInput) {
   const supabase = await createServerClient()
 
@@ -164,20 +176,14 @@ export async function updateCustomer(id: string, input: UpdateCustomerInput) {
     return { data: null, error: error.message }
   }
 
-  revalidatePath('/customers')
-  revalidatePath(`/customers/${id}`)
-  return { data, error: null }
+  revalidatePath('/dashboard/customers')
+  return { data: data as Customer, error: null }
 }
 
-/**
- * Delete a customer.
- * Blocked if the customer has any orders that are not cancelled —
- * those orders would lose their customer reference.
- */
 export async function deleteCustomer(id: string) {
   const supabase = await createServerClient()
 
-  // Guard: check for active orders
+  // Guard: block delete if customer has active orders
   const { count, error: checkError } = await supabase
     .from('orders')
     .select('id', { count: 'exact', head: true })
@@ -205,6 +211,24 @@ export async function deleteCustomer(id: string) {
     return { error: error.message }
   }
 
-  revalidatePath('/customers')
+  revalidatePath('/dashboard/customers')
   return { error: null }
+}
+
+// ── Search customers (used in order assignment modal) ──────
+export async function searchCustomers(query: string) {
+  const supabase = await createServerClient()
+
+  const { data, error } = await supabase
+    .from('customers')
+    .select('*')
+    .or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`)
+    .limit(10)
+
+  if (error) {
+    console.error('[searchCustomers]', error)
+    return { data: null, error: error.message }
+  }
+
+  return { data: data as Customer[], error: null }
 }
