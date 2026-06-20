@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  HiOutlineArrowLeft, HiOutlineSave, HiOutlineUpload, HiOutlineX,
+  HiOutlineSave, HiOutlineUpload, HiOutlineX,
   HiOutlinePhotograph, HiOutlinePlus, HiOutlineTrash, HiOutlineDuplicate,
   HiOutlineChevronDown, HiOutlineTag, HiOutlineCube, HiOutlineTruck,
   HiOutlineGlobeAlt, HiOutlineEye, HiOutlineEyeOff, HiOutlineCheckCircle,
@@ -23,8 +23,7 @@ import {
   type ShippingClass,
   type Category,
 } from '@/actions/products';
-import { createServerClient } from '@/lib/supabase/server';
-import { auth } from '@clerk/nextjs/server';
+
 
 // ── Inline createCategory (client-safe via server action) ──
 // We call getCategories from actions/products which already has auth.
@@ -195,7 +194,7 @@ const RichTextEditor = ({ value, onChange, placeholder }: { value: string; onCha
   );
 };
 
-const ImageUpload = ({ images, onImagesChange, onReorder }: {
+const ImageUpload = ({ images, onImagesChange, onReorder: _onReorder }: {
   images: ProductImage[];
   onImagesChange: (images: ProductImage[]) => void;
   onReorder: (images: ProductImage[]) => void;
@@ -513,7 +512,7 @@ export default function AddProductPage() {
           categoryId: data.category_id ?? '',
           tags: data.tags ?? [],
           status: data.status,
-          visibility: (data.visibility === 'private' ? 'public' : data.visibility) as ProductVisibility,
+          visibility: (data.visibility === 'hidden' ? 'hidden' : 'public') as ProductVisibility,
           vendor: data.vendor ?? '',
           productType: data.product_type ?? '',
           weight: data.weight ?? 0,
@@ -594,9 +593,9 @@ export default function AddProductPage() {
 
       const variants = formData.hasVariants
         ? formData.variants.map(v => ({
-            options: v.options, price: v.price,
-            compare_price: v.comparePrice, sku: v.sku || undefined, stock: v.stock,
-          }))
+          options: v.options, price: v.price,
+          compare_price: v.comparePrice, sku: v.sku || undefined, stock: v.stock,
+        }))
         : [];
 
       if (isEditing && editId) {
@@ -606,7 +605,7 @@ export default function AddProductPage() {
         await replaceProductVariants(editId, variantOptions, variants);
         router.push('/dashboard/products');
       } else {
-        const { data, error } = await createProduct({
+        const { error } = await createProduct({
           ...input,
           image_urls: savedImages.map(img => img.url),
           variant_options: variantOptions,

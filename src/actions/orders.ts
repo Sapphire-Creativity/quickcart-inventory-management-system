@@ -8,8 +8,8 @@ import { adjustStock } from "./products";
 // ── Types ──────────────────────────────────────────────────
 
 export type OrderStatus = "pending" | "processing" | "completed" | "cancelled";
-export type PaymentStatus = "unpaid" | "paid" | "partially_paid" | "refunded";
-export type PaymentMethod = "cash" | "card" | "transfer" | "other";
+export type PaymentStatus = "paid" | "unpaid" | "refunded";
+export type PaymentMethod = "cash" | "card" | "transfer";
 export type OrderType = "delivery" | "pickup" | "in_store";
 
 export type OrderItemInput = {
@@ -135,7 +135,7 @@ export async function createOrder(input: CreateOrderInput) {
       notes: input.notes ?? null,
       admin_notes: input.admin_notes ?? null,
       created_by: "admin",
-      user_id: userId,                          // ← tenant stamp
+      user_id: userId,
     })
     .select()
     .single();
@@ -155,7 +155,7 @@ export async function createOrder(input: CreateOrderInput) {
       image_url: item.image_url ?? null,
       quantity: item.quantity,
       unit_price: item.unit_price,
-      user_id: userId,                          // ← tenant stamp
+      user_id: userId,
     })),
   );
 
@@ -208,7 +208,7 @@ export async function getOrders(options: GetOrdersOptions = {}) {
       `,
       { count: "exact" },
     )
-    .eq("user_id", userId)                      // ← tenant filter
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -245,20 +245,20 @@ export async function getOrderById(id: string) {
       .from("orders")
       .select("*, customers(id, name, email, phone, address)")
       .eq("id", id)
-      .eq("user_id", userId)                    // ← tenant filter
+      .eq("user_id", userId)
       .single(),
 
     supabase
       .from("order_items")
       .select("*")
       .eq("order_id", id)
-      .eq("user_id", userId),                   // ← tenant filter
+      .eq("user_id", userId),
 
     supabase
       .from("transactions")
       .select("*")
       .eq("order_id", id)
-      .eq("user_id", userId)                    // ← tenant filter
+      .eq("user_id", userId)
       .order("created_at", { ascending: false }),
   ]);
 
@@ -286,20 +286,23 @@ export async function updateOrderStatus(
 
   const supabase = await createServerClient();
 
-  const { data: currentOrder, error: fetchError } = await supabase
+  const { data: currentOrderRaw, error: fetchError } = await supabase
     .from("orders")
     .select("status, total, payment_method")
     .eq("id", id)
-    .eq("user_id", userId)                      // ← tenant filter
+    .eq("user_id", userId)
     .single();
 
   if (fetchError) return { data: null, error: fetchError.message };
 
-  if (currentOrder.status === "cancelled") {
+  const currentStatus = currentOrderRaw.status;
+  const inputStatus = input.status;
+
+  if (currentStatus === "cancelled") {
     return { data: null, error: "Cannot update a cancelled order." };
   }
 
-  if (currentOrder.status === "completed" && input.status !== "completed") {
+  if (currentStatus === "completed" && inputStatus !== "completed") {
     return {
       data: null,
       error: "Cannot change the status of a completed order.",
@@ -307,19 +310,21 @@ export async function updateOrderStatus(
   }
 
   const paymentStatusUpdate =
-    input.status === "completed" && currentOrder.status !== "completed"
+    inputStatus === "completed" && currentStatus !== "completed"
       ? "paid"
       : input.payment_status;
 
   const { data: order, error: updateError } = await supabase
     .from("orders")
     .update({
-      status: input.status,
+      status: inputStatus,
       ...(paymentStatusUpdate && { payment_status: paymentStatusUpdate }),
-      ...(input.admin_notes !== undefined && { admin_notes: input.admin_notes }),
+      ...(input.admin_notes !== undefined && {
+        admin_notes: input.admin_notes,
+      }),
     })
     .eq("id", id)
-    .eq("user_id", userId)                      // ← tenant filter
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -329,14 +334,14 @@ export async function updateOrderStatus(
   }
 
   // ── Side effect: completed → create transaction ────────────
-  if (input.status === "completed" && currentOrder.status !== "completed") {
+  if (inputStatus === "completed" && currentStatus !== "completed") {
     const { error: txError } = await supabase.from("transactions").insert({
       order_id: id,
-      amount: currentOrder.total,
+      amount: currentOrderRaw.total,
       type: "sale",
       status: "completed",
-      payment_method: currentOrder.payment_method ?? null,
-      user_id: userId,                          // ← tenant stamp
+      payment_method: currentOrderRaw.payment_method ?? null,
+      user_id: userId,
     });
 
     if (txError)
@@ -344,15 +349,17 @@ export async function updateOrderStatus(
   }
 
   // ── Side effect: cancelled → restore stock ─────────────────
-  if (input.status === "cancelled" && currentOrder.status !== "cancelled") {
+  // @ts-expect-error - TypeScript narrows currentStatus but we've already handled cancelled case above
+  if (inputStatus === "cancelled" && currentStatus !== "cancelled") {
     const { data: items } = await supabase
       .from("order_items")
       .select("product_id, quantity")
       .eq("order_id", id)
-      .eq("user_id", userId);                   // ← tenant filter
+      .eq("user_id", userId);
 
     if (items) {
       for (const item of items) {
+        if (!item.product_id) continue;
         await adjustStock({ productId: item.product_id }, item.quantity);
       }
     }
@@ -362,7 +369,6 @@ export async function updateOrderStatus(
   revalidatePath(`/dashboard/orders/${id}`);
   return { data: order, error: null };
 }
-
 export async function assignCustomerToOrder(
   orderId: string,
   customerId: string,
@@ -376,7 +382,7 @@ export async function assignCustomerToOrder(
     .from("orders")
     .update({ customer_id: customerId })
     .eq("id", orderId)
-    .eq("user_id", userId);                     // ← tenant filter
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[assignCustomerToOrder]", error);
@@ -397,7 +403,7 @@ export async function deleteOrder(id: string) {
     .from("orders")
     .select("status")
     .eq("id", id)
-    .eq("user_id", userId)                      // ← tenant filter
+    .eq("user_id", userId)
     .single();
 
   if (fetchError) return { error: fetchError.message };
@@ -412,10 +418,11 @@ export async function deleteOrder(id: string) {
     .from("order_items")
     .select("product_id, quantity")
     .eq("order_id", id)
-    .eq("user_id", userId);                     // ← tenant filter
+    .eq("user_id", userId);
 
   if (items) {
     for (const item of items) {
+      if (!item.product_id) continue;
       await adjustStock({ productId: item.product_id }, item.quantity);
     }
   }
@@ -424,7 +431,7 @@ export async function deleteOrder(id: string) {
     .from("orders")
     .delete()
     .eq("id", id)
-    .eq("user_id", userId);                     // ← tenant filter
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[deleteOrder]", error);

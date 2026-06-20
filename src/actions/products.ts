@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 // ── Types ──────────────────────────────────────────────────
 
 export type ProductStatus = "draft" | "active" | "archived";
-export type ProductVisibility = "public" | "private" | "hidden";
+export type ProductVisibility = "public" | "hidden";
 export type ShippingClass = "standard" | "express" | "free" | "local_pickup";
 
 export type ProductDimensions = {
@@ -193,12 +193,12 @@ export async function createProduct(input: CreateProductInput) {
     const { error } = await supabase.from("product_variants").insert(
       input.variants.map((v) => ({
         product_id: product.id,
-        options: v.options,
+        options: v.options as any,
         price: v.price,
         compare_price: v.compare_price ?? null,
         sku: v.sku ?? null,
         stock: v.stock,
-        user_id: userId,f
+        user_id: userId,
       })),
     );
     if (error) console.error("[createProduct] variants", error);
@@ -368,7 +368,7 @@ export async function updateProduct(id: string, input: UpdateProductInput) {
 
   const { data, error } = await supabase
     .from("products")
-    .update(updates)
+    .update(updates as any)
     .eq("id", id)
     .eq("user_id", userId) // ← tenant filter
     .select()
@@ -566,7 +566,7 @@ export async function replaceProductVariants(
     const { error } = await supabase.from("product_variants").insert(
       variants.map((v) => ({
         product_id: productId,
-        options: v.options,
+        options: v.options as any,
         price: v.price,
         compare_price: v.compare_price ?? null,
         sku: v.sku ?? null,

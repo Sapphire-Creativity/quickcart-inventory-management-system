@@ -56,7 +56,6 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 const PAYMENT_CONFIG: Record<string, { label: string; className: string }> = {
   paid: { label: 'Paid', className: 'bg-emerald-100 text-emerald-700' },
   unpaid: { label: 'Unpaid', className: 'bg-amber-100 text-amber-700' },
-  partially_paid: { label: 'Partial', className: 'bg-blue-100 text-blue-700' },
   refunded: { label: 'Refunded', className: 'bg-gray-100 text-gray-600' },
 }
 
@@ -599,7 +598,6 @@ const CreateOrderModal = ({
                     <option value="cash">Cash</option>
                     <option value="card">Card</option>
                     <option value="transfer">Transfer</option>
-                    <option value="other">Other</option>
                   </select>
                 </div>
                 <div>
@@ -1112,7 +1110,6 @@ export default function OrdersPage() {
                 <option value="all">All Payment</option>
                 <option value="paid">Paid</option>
                 <option value="unpaid">Unpaid</option>
-                <option value="partially_paid">Partial</option>
                 <option value="refunded">Refunded</option>
               </select>
               <button
