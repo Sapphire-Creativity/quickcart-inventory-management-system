@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@clerk/nextjs/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { adjustStock } from "./products";
@@ -22,7 +23,7 @@ export type OrderItemInput = {
 };
 
 export type CreateOrderInput = {
-  customer_id?: string; // ✅ FIX 1: optional — orders can be unassigned
+  customer_id?: string;
   items: OrderItemInput[];
   order_type?: OrderType;
   payment_method?: PaymentMethod;
@@ -59,11 +60,10 @@ function generateOrderNumber(): string {
 
 // ── Actions ────────────────────────────────────────────────
 
-/**
- * Create a new order with line items.
- * Validates stock, creates order + items, decrements stock.
- */
 export async function createOrder(input: CreateOrderInput) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   // ── Step 1: Validate stock ────────────────────────────────
@@ -123,7 +123,7 @@ export async function createOrder(input: CreateOrderInput) {
     .from("orders")
     .insert({
       order_number: generateOrderNumber(),
-      customer_id: input.customer_id ?? null, // ✅ FIX 1: nullable
+      customer_id: input.customer_id ?? null,
       status: "pending",
       payment_status: "unpaid",
       payment_method: input.payment_method ?? null,
@@ -135,6 +135,7 @@ export async function createOrder(input: CreateOrderInput) {
       notes: input.notes ?? null,
       admin_notes: input.admin_notes ?? null,
       created_by: "admin",
+      user_id: userId,                          // ← tenant stamp
     })
     .select()
     .single();
@@ -154,6 +155,7 @@ export async function createOrder(input: CreateOrderInput) {
       image_url: item.image_url ?? null,
       quantity: item.quantity,
       unit_price: item.unit_price,
+      user_id: userId,                          // ← tenant stamp
     })),
   );
 
@@ -177,10 +179,10 @@ export async function createOrder(input: CreateOrderInput) {
   return { data: order, error: null };
 }
 
-/**
- * Get a paginated, filterable list of orders with customer info.
- */
 export async function getOrders(options: GetOrdersOptions = {}) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized", count: 0 };
+
   const supabase = await createServerClient();
   const {
     page = 1,
@@ -206,6 +208,7 @@ export async function getOrders(options: GetOrdersOptions = {}) {
       `,
       { count: "exact" },
     )
+    .eq("user_id", userId)                      // ← tenant filter
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -231,11 +234,10 @@ export async function getOrders(options: GetOrdersOptions = {}) {
   };
 }
 
-/**
- * Get a single order by ID with full details:
- * customer, all line items, and transaction history.
- */
 export async function getOrderById(id: string) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   const [orderResult, itemsResult, transactionsResult] = await Promise.all([
@@ -243,14 +245,20 @@ export async function getOrderById(id: string) {
       .from("orders")
       .select("*, customers(id, name, email, phone, address)")
       .eq("id", id)
+      .eq("user_id", userId)                    // ← tenant filter
       .single(),
 
-    supabase.from("order_items").select("*").eq("order_id", id),
+    supabase
+      .from("order_items")
+      .select("*")
+      .eq("order_id", id)
+      .eq("user_id", userId),                   // ← tenant filter
 
     supabase
       .from("transactions")
       .select("*")
       .eq("order_id", id)
+      .eq("user_id", userId)                    // ← tenant filter
       .order("created_at", { ascending: false }),
   ]);
 
@@ -269,21 +277,20 @@ export async function getOrderById(id: string) {
   };
 }
 
-/**
- * Update an order's status.
- * - completed → auto-sets payment_status to 'paid' + creates transaction
- * - cancelled → restores stock for all items
- */
 export async function updateOrderStatus(
   id: string,
   input: UpdateOrderStatusInput,
 ) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   const { data: currentOrder, error: fetchError } = await supabase
     .from("orders")
     .select("status, total, payment_method")
     .eq("id", id)
+    .eq("user_id", userId)                      // ← tenant filter
     .single();
 
   if (fetchError) return { data: null, error: fetchError.message };
@@ -299,7 +306,6 @@ export async function updateOrderStatus(
     };
   }
 
-  // ✅ FIX 2: auto-set payment_status to paid when completing
   const paymentStatusUpdate =
     input.status === "completed" && currentOrder.status !== "completed"
       ? "paid"
@@ -310,11 +316,10 @@ export async function updateOrderStatus(
     .update({
       status: input.status,
       ...(paymentStatusUpdate && { payment_status: paymentStatusUpdate }),
-      ...(input.admin_notes !== undefined && {
-        admin_notes: input.admin_notes,
-      }),
+      ...(input.admin_notes !== undefined && { admin_notes: input.admin_notes }),
     })
     .eq("id", id)
+    .eq("user_id", userId)                      // ← tenant filter
     .select()
     .single();
 
@@ -331,6 +336,7 @@ export async function updateOrderStatus(
       type: "sale",
       status: "completed",
       payment_method: currentOrder.payment_method ?? null,
+      user_id: userId,                          // ← tenant stamp
     });
 
     if (txError)
@@ -342,7 +348,8 @@ export async function updateOrderStatus(
     const { data: items } = await supabase
       .from("order_items")
       .select("product_id, quantity")
-      .eq("order_id", id);
+      .eq("order_id", id)
+      .eq("user_id", userId);                   // ← tenant filter
 
     if (items) {
       for (const item of items) {
@@ -356,20 +363,20 @@ export async function updateOrderStatus(
   return { data: order, error: null };
 }
 
-/**
- * Assign a customer to an existing order.
- */
-// ✅ FIX 3: new action — was missing entirely
 export async function assignCustomerToOrder(
   orderId: string,
   customerId: string,
 ) {
+  const { userId } = await auth();
+  if (!userId) return { error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   const { error } = await supabase
     .from("orders")
     .update({ customer_id: customerId })
-    .eq("id", orderId);
+    .eq("id", orderId)
+    .eq("user_id", userId);                     // ← tenant filter
 
   if (error) {
     console.error("[assignCustomerToOrder]", error);
@@ -380,17 +387,17 @@ export async function assignCustomerToOrder(
   return { error: null };
 }
 
-/**
- * Delete an order.
- * Only allowed when status is 'pending' — stock is restored before deletion.
- */
 export async function deleteOrder(id: string) {
+  const { userId } = await auth();
+  if (!userId) return { error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   const { data: order, error: fetchError } = await supabase
     .from("orders")
     .select("status")
     .eq("id", id)
+    .eq("user_id", userId)                      // ← tenant filter
     .single();
 
   if (fetchError) return { error: fetchError.message };
@@ -401,11 +408,11 @@ export async function deleteOrder(id: string) {
     };
   }
 
-  // Restore stock before deleting
   const { data: items } = await supabase
     .from("order_items")
     .select("product_id, quantity")
-    .eq("order_id", id);
+    .eq("order_id", id)
+    .eq("user_id", userId);                     // ← tenant filter
 
   if (items) {
     for (const item of items) {
@@ -413,7 +420,11 @@ export async function deleteOrder(id: string) {
     }
   }
 
-  const { error } = await supabase.from("orders").delete().eq("id", id);
+  const { error } = await supabase
+    .from("orders")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);                     // ← tenant filter
 
   if (error) {
     console.error("[deleteOrder]", error);

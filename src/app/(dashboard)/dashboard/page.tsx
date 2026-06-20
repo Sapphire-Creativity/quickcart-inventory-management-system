@@ -167,7 +167,7 @@ export default function DashboardPage() {
         <WeeklyReport data={weeklyData} loading={loading} />
 
         <div className="flex flex-col gap-4">
-          <UsersWidget />
+         
           <TopProducts products={topProducts} loading={loading} />
         </div>
       </motion.div>

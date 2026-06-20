@@ -1,13 +1,14 @@
 'use server'
 
+import { auth } from '@clerk/nextjs/server'
 import { createServerClient } from '@/lib/supabase/server'
 
 // ── Types ──────────────────────────────────────────────────
 
 export interface DailyRevenue {
-  day: string        // e.g. "Mon", "Tue"
-  date: string       // ISO date string e.g. "2024-03-11"
-  value: number      // revenue for that day
+  day: string
+  date: string
+  value: number
 }
 
 export interface WeeklyRevenueData {
@@ -15,7 +16,6 @@ export interface WeeklyRevenueData {
   lastWeek: DailyRevenue[]
   thisWeekTotal: number
   lastWeekTotal: number
-  /** Percentage change vs last week (can be negative) */
   weekOverWeekChange: number
 }
 
@@ -73,19 +73,15 @@ function pctChange(current: number, previous: number): number {
 
 // ── Actions ────────────────────────────────────────────────
 
-/**
- * Returns all KPI numbers needed for the dashboard stat cards:
- * revenue, order counts, and customer count — this week vs last week.
- */
 export async function getDashboardStats(): Promise<{ data: DashboardStats | null; error: string | null }> {
+  const { userId } = await auth()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
   const supabase = await createServerClient()
 
   const now = new Date()
   const todayStart = startOfDay(now)
-
-  // Week boundaries
-  // "This week" = last 7 days (rolling), "last week" = the 7 days before that
-  const thisWeekStart = addDays(todayStart, -6)   // 7 days including today
+  const thisWeekStart = addDays(todayStart, -6)
   const lastWeekStart = addDays(todayStart, -13)
   const lastWeekEnd   = addDays(todayStart, -7)
   const monthStart    = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -100,61 +96,36 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats | null
     allOrdersResult,
     activeCustomersResult,
   ] = await Promise.all([
-    // Revenue this week (completed sales only)
-    supabase
-      .from('transactions')
-      .select('amount')
-      .eq('type', 'sale')
-      .eq('status', 'completed')
+    supabase.from('transactions').select('amount')
+      .eq('user_id', userId).eq('type', 'sale').eq('status', 'completed')
       .gte('created_at', thisWeekStart.toISOString()),
 
-    // Revenue last week
-    supabase
-      .from('transactions')
-      .select('amount')
-      .eq('type', 'sale')
-      .eq('status', 'completed')
+    supabase.from('transactions').select('amount')
+      .eq('user_id', userId).eq('type', 'sale').eq('status', 'completed')
       .gte('created_at', lastWeekStart.toISOString())
       .lt('created_at', lastWeekEnd.toISOString()),
 
-    // Revenue this month
-    supabase
-      .from('transactions')
-      .select('amount')
-      .eq('type', 'sale')
-      .eq('status', 'completed')
+    supabase.from('transactions').select('amount')
+      .eq('user_id', userId).eq('type', 'sale').eq('status', 'completed')
       .gte('created_at', monthStart.toISOString()),
 
-    // All-time revenue
-    supabase
-      .from('transactions')
-      .select('amount')
-      .eq('type', 'sale')
-      .eq('status', 'completed'),
+    supabase.from('transactions').select('amount')
+      .eq('user_id', userId).eq('type', 'sale').eq('status', 'completed'),
 
-    // Orders this week
-    supabase
-      .from('orders')
-      .select('status')
+    supabase.from('orders').select('status')
+      .eq('user_id', userId)
       .gte('created_at', thisWeekStart.toISOString()),
 
-    // Orders last week
-    supabase
-      .from('orders')
-      .select('status')
+    supabase.from('orders').select('status')
+      .eq('user_id', userId)
       .gte('created_at', lastWeekStart.toISOString())
       .lt('created_at', lastWeekEnd.toISOString()),
 
-    // All orders (for status breakdown)
-    supabase
-      .from('orders')
-      .select('status'),
+    supabase.from('orders').select('status')
+      .eq('user_id', userId),
 
-    // Active customers
-    supabase
-      .from('customers')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'active'),
+    supabase.from('customers').select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).eq('status', 'active'),
   ])
 
   if (thisWeekTxResult.error) return { data: null, error: thisWeekTxResult.error.message }
@@ -164,7 +135,6 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats | null
 
   const thisWeekRevenue = sum(thisWeekTxResult.data)
   const lastWeekRevenue = sum(lastWeekTxResult.data)
-
   const thisWeekOrderCount = thisWeekOrdersResult.data?.length ?? 0
   const lastWeekOrderCount = lastWeekOrdersResult.data?.length ?? 0
   const allOrders = allOrdersResult.data ?? []
@@ -196,11 +166,10 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats | null
   }
 }
 
-/**
- * Returns daily revenue for this week and last week,
- * shaped as { day: "Mon", value: 1234 } arrays ready for the chart.
- */
 export async function getWeeklyRevenue(): Promise<{ data: WeeklyRevenueData | null; error: string | null }> {
+  const { userId } = await auth()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
   const supabase = await createServerClient()
 
   const now = new Date()
@@ -209,30 +178,23 @@ export async function getWeeklyRevenue(): Promise<{ data: WeeklyRevenueData | nu
   const lastWeekStart = addDays(todayStart, -13)
 
   const [thisWeekResult, lastWeekResult] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select('amount, created_at')
-      .eq('type', 'sale')
-      .eq('status', 'completed')
+    supabase.from('transactions').select('amount, created_at')
+      .eq('user_id', userId).eq('type', 'sale').eq('status', 'completed')
       .gte('created_at', thisWeekStart.toISOString())
       .lte('created_at', addDays(todayStart, 1).toISOString()),
 
-    supabase
-      .from('transactions')
-      .select('amount, created_at')
-      .eq('type', 'sale')
-      .eq('status', 'completed')
+    supabase.from('transactions').select('amount, created_at')
+      .eq('user_id', userId).eq('type', 'sale').eq('status', 'completed')
       .gte('created_at', lastWeekStart.toISOString())
       .lt('created_at', thisWeekStart.toISOString()),
   ])
 
   if (thisWeekResult.error) return { data: null, error: thisWeekResult.error.message }
 
-  // Build a map of ISO date → revenue for each week
   const buildDailyMap = (rows: { amount: number; created_at: string }[]) => {
     const map: Record<string, number> = {}
     for (const row of rows) {
-      const date = row.created_at.slice(0, 10) // "YYYY-MM-DD"
+      const date = row.created_at.slice(0, 10)
       map[date] = (map[date] ?? 0) + Number(row.amount)
     }
     return map
@@ -241,7 +203,6 @@ export async function getWeeklyRevenue(): Promise<{ data: WeeklyRevenueData | nu
   const thisWeekMap = buildDailyMap(thisWeekResult.data ?? [])
   const lastWeekMap = buildDailyMap(lastWeekResult.data ?? [])
 
-  // Build 7-day arrays anchored to today
   const thisWeek: DailyRevenue[] = []
   const lastWeek: DailyRevenue[] = []
 
@@ -271,14 +232,12 @@ export async function getWeeklyRevenue(): Promise<{ data: WeeklyRevenueData | nu
   }
 }
 
-/**
- * Returns the top N products by units sold, joining order_items → products.
- * Only counts items from completed orders.
- */
 export async function getTopProducts(limit = 5): Promise<{ data: TopProduct[] | null; error: string | null }> {
+  const { userId } = await auth()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
   const supabase = await createServerClient()
 
-  // Pull all order_items from completed orders with product info
   const { data, error } = await supabase
     .from('order_items')
     .select(`
@@ -289,6 +248,7 @@ export async function getTopProducts(limit = 5): Promise<{ data: TopProduct[] | 
       orders!inner(status),
       products(id, sku, price, product_images(url, is_featured))
     `)
+    .eq('user_id', userId)                      // ← tenant filter
     .eq('orders.status', 'completed')
 
   if (error) {
@@ -296,15 +256,9 @@ export async function getTopProducts(limit = 5): Promise<{ data: TopProduct[] | 
     return { data: null, error: error.message }
   }
 
-  // Aggregate by product_id
   const map: Record<string, {
-    id: string
-    name: string
-    sku: string | null
-    price: number
-    unitsSold: number
-    revenue: number
-    imageUrl: string | null
+    id: string; name: string; sku: string | null
+    price: number; unitsSold: number; revenue: number; imageUrl: string | null
   }> = {}
 
   for (const item of data ?? []) {
@@ -335,11 +289,10 @@ export async function getTopProducts(limit = 5): Promise<{ data: TopProduct[] | 
   return { data: sorted, error: null }
 }
 
-/**
- * Returns the 5 most recent completed transactions
- * for the dashboard TransactionsTable.
- */
 export async function getRecentTransactions() {
+  const { userId } = await auth()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
   const supabase = await createServerClient()
 
   const { data, error } = await supabase
@@ -350,6 +303,7 @@ export async function getRecentTransactions() {
         customers(id, name, email)
       )
     `)
+    .eq('user_id', userId)                      // ← tenant filter
     .order('created_at', { ascending: false })
     .limit(5)
 

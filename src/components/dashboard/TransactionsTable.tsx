@@ -37,7 +37,7 @@ export function TransactionsTable({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-heading">Recent Transactions</h3>
         <Link
-          href="/admin/transactions"
+          href="/dashboard/transactions"
           className="text-xs font-medium text-brand-600 hover:underline"
         >
           View all →

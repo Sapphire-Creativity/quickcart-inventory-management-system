@@ -94,7 +94,8 @@ export async function POST(req: Request) {
   // ── user.created ─────────────────────────────────────────
   if (type === "user.created") {
     const { error } = await supabase.from("admin_profiles").insert({
-      id: data.id, // ✅ matches your table's primary key
+      id: data.id,
+      user_id: data.id,
       email: primaryEmail,
       full_name: fullName,
       role: "admin",
@@ -119,7 +120,7 @@ export async function POST(req: Request) {
         email: primaryEmail,
         full_name: fullName,
       })
-      .eq("id", data.id); // ✅ matches your table's primary key
+      .eq("id", data.id);
 
     if (error) {
       console.error("[webhook] Failed to update admin profile:", error);
@@ -136,6 +137,7 @@ export async function POST(req: Request) {
   if (type === "user.deleted") {
     const { error } = await supabase
       .from("admin_profiles")
+
       .delete()
       .eq("id", data.id); // ✅ matches your table's primary key
 

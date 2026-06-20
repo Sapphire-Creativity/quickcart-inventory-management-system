@@ -1,8 +1,6 @@
 "use client";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Dashboard Layout — Sidebar + Header shell for all dashboard routes
-// ─────────────────────────────────────────────────────────────────────────────
+ 
 import React from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";

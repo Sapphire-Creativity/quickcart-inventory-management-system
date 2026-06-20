@@ -40,8 +40,8 @@ export function WeeklyAreaChart({ data }: { data: DataPoint[] }) {
       <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id="weeklyGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.15} />
-            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+            <stop offset="5%"  stopColor="#10b981" stopOpacity={0.15} />
+            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
           </linearGradient>
         </defs>
 
@@ -71,11 +71,11 @@ export function WeeklyAreaChart({ data }: { data: DataPoint[] }) {
         <Area
           type="monotone"
           dataKey="value"
-          stroke="#6366f1"
+          stroke="#10b981"
           strokeWidth={2}
           fill="url(#weeklyGradient)"
           dot={false}
-          activeDot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }}
+          activeDot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
         />
       </AreaChart>
     </ResponsiveContainer>

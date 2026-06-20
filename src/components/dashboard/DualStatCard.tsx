@@ -24,7 +24,7 @@ export function DualStatCard({
     };
 
     return (
-        <div className={`relative group bg-gradient-to-br ${variants[variant]} border rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5`}>
+        <div className={`card relative group bg-gradient-to-br ${variants[variant]} border rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5`}>
             {/* Header */}
             <div className="relative flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">

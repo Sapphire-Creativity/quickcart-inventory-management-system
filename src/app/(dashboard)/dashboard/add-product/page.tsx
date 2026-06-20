@@ -9,7 +9,6 @@ import {
   HiOutlineGlobeAlt, HiOutlineEye, HiOutlineEyeOff, HiOutlineCheckCircle,
   HiOutlineExclamationCircle, HiOutlinePencilAlt, HiOutlineSwitchHorizontal,
 } from 'react-icons/hi';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -24,6 +23,30 @@ import {
   type ShippingClass,
   type Category,
 } from '@/actions/products';
+import { createServerClient } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+
+// ── Inline createCategory (client-safe via server action) ──
+// We call getCategories from actions/products which already has auth.
+// For createCategory we need a small dedicated action — add this to
+// your actions/products.ts file:
+//
+//   export async function createCategory(name: string) {
+//     const { userId } = await auth()
+//     if (!userId) return { data: null, error: 'Unauthorized' }
+//     const supabase = await createServerClient()
+//     const { data, error } = await supabase
+//       .from('categories')
+//       .insert({ name, user_id: userId })
+//       .select()
+//       .single()
+//     if (error) return { data: null, error: error.message }
+//     revalidatePath('/dashboard/products')
+//     return { data: data as Category, error: null }
+//   }
+//
+// Then import it here:
+import { createCategory } from '@/actions/products';
 
 // ============ Types ============
 interface ProductVariantOption {
@@ -76,22 +99,94 @@ interface ProductFormData {
   slug: string;
 }
 
+// ============ Create Category Modal ============
+const CreateCategoryModal = ({
+  isOpen,
+  onClose,
+  onCreated,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreated: (category: Category) => void;
+}) => {
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) { setName(''); setError(''); }
+  }, [isOpen]);
+
+  const handleCreate = async () => {
+    if (!name.trim()) { setError('Category name is required'); return; }
+    setSaving(true);
+    const { data, error: err } = await createCategory(name.trim());
+    setSaving(false);
+    if (err || !data) { setError(err ?? 'Failed to create category'); return; }
+    onCreated(data);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-surface rounded-xl shadow-xl w-full max-w-sm"
+      >
+        <div className="flex items-center justify-between p-5 border-b border-default">
+          <h3 className="text-base font-semibold">New Category</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition">
+            <HiOutlineX className="w-5 h-5 text-muted" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+          )}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Category Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={e => { setName(e.target.value); setError(''); }}
+              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+              className="input"
+              placeholder="e.g., Electronics, Clothing"
+            />
+          </div>
+        </div>
+        <div className="flex gap-3 p-5 border-t border-default">
+          <button onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+          <button onClick={handleCreate} disabled={saving} className="btn btn-primary flex-1">
+            {saving ? 'Creating...' : 'Create Category'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 // ============ Helper Components ============
-// (RichTextEditor, ImageUpload, VariantsManager, TagsInput stay exactly the same as your original)
 
 const RichTextEditor = ({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder?: string }) => {
   return (
     <div className="border border-default rounded-lg overflow-hidden">
       <div className="bg-gray-50 border-b border-default px-3 py-2 flex gap-2">
-        <button className="p-1 hover:bg-gray-200 rounded text-xs font-medium">B</button>
-        <button className="p-1 hover:bg-gray-200 rounded text-xs font-medium italic">I</button>
-        <button className="p-1 hover:bg-gray-200 rounded text-xs font-medium underline">U</button>
+        <button type="button" className="p-1 hover:bg-gray-200 rounded text-xs font-medium">B</button>
+        <button type="button" className="p-1 hover:bg-gray-200 rounded text-xs font-medium italic">I</button>
+        <button type="button" className="p-1 hover:bg-gray-200 rounded text-xs font-medium underline">U</button>
         <div className="w-px h-4 bg-gray-300 mx-1" />
-        <button className="p-1 hover:bg-gray-200 rounded text-xs">H1</button>
-        <button className="p-1 hover:bg-gray-200 rounded text-xs">H2</button>
+        <button type="button" className="p-1 hover:bg-gray-200 rounded text-xs">H1</button>
+        <button type="button" className="p-1 hover:bg-gray-200 rounded text-xs">H2</button>
         <div className="w-px h-4 bg-gray-300 mx-1" />
-        <button className="p-1 hover:bg-gray-200 rounded text-xs">• List</button>
-        <button className="p-1 hover:bg-gray-200 rounded text-xs">1. List</button>
+        <button type="button" className="p-1 hover:bg-gray-200 rounded text-xs">• List</button>
+        <button type="button" className="p-1 hover:bg-gray-200 rounded text-xs">1. List</button>
       </div>
       <textarea value={value} onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder} rows={8}
@@ -167,10 +262,10 @@ const ImageUpload = ({ images, onImagesChange, onReorder }: {
                 </div>
               )}
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                <button onClick={() => setFeatured(image.id)} className="p-1.5 bg-white rounded-lg hover:bg-gray-100">
+                <button type="button" onClick={() => setFeatured(image.id)} className="p-1.5 bg-white rounded-lg hover:bg-gray-100">
                   <HiOutlineCheckCircle className="w-4 h-4" />
                 </button>
-                <button onClick={() => removeImage(image.id)} className="p-1.5 bg-white rounded-lg hover:bg-red-50 hover:text-red-500">
+                <button type="button" onClick={() => removeImage(image.id)} className="p-1.5 bg-white rounded-lg hover:bg-red-50 hover:text-red-500">
                   <HiOutlineTrash className="w-4 h-4" />
                 </button>
               </div>
@@ -233,7 +328,7 @@ const VariantsManager = ({ options, variants, onOptionsChange, onVariantsChange 
             value={newOptionName} onChange={(e) => setNewOptionName(e.target.value)} className="input flex-1" />
           <input type="text" placeholder="Values (e.g., Small, Medium, Large)"
             value={newOptionValues} onChange={(e) => setNewOptionValues(e.target.value)} className="input flex-1" />
-          <button onClick={addOption} className="btn btn-primary whitespace-nowrap">
+          <button type="button" onClick={addOption} className="btn btn-primary whitespace-nowrap">
             <HiOutlinePlus className="w-4 h-4" /> Add Option
           </button>
         </div>
@@ -242,7 +337,7 @@ const VariantsManager = ({ options, variants, onOptionsChange, onVariantsChange 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">Product Options</label>
-            <button onClick={generateCombinations} className="btn btn-secondary btn-sm">
+            <button type="button" onClick={generateCombinations} className="btn btn-secondary btn-sm">
               <HiOutlineSwitchHorizontal className="w-4 h-4" /> Generate Combinations
             </button>
           </div>
@@ -252,7 +347,7 @@ const VariantsManager = ({ options, variants, onOptionsChange, onVariantsChange 
                 <span className="font-medium">{option.name}</span>
                 <span className="text-sm text-muted ml-2">{option.values.join(', ')}</span>
               </div>
-              <button onClick={() => removeOption(option.id)} className="text-red-500 hover:text-red-600">
+              <button type="button" onClick={() => removeOption(option.id)} className="text-red-500 hover:text-red-600">
                 <HiOutlineTrash className="w-4 h-4" />
               </button>
             </div>
@@ -271,7 +366,7 @@ const VariantsManager = ({ options, variants, onOptionsChange, onVariantsChange 
                   <p className="font-mono text-sm">
                     {Object.entries(variant.options).map(([key, val]) => `${key}: ${val}`).join(' • ')}
                   </p>
-                  <button onClick={() => setExpandedVariant(expandedVariant === variant.id ? null : variant.id)}>
+                  <button type="button" onClick={() => setExpandedVariant(expandedVariant === variant.id ? null : variant.id)}>
                     <HiOutlineChevronDown className={`w-5 h-5 transition-transform ${expandedVariant === variant.id ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
@@ -326,13 +421,13 @@ const TagsInput = ({ tags, onChange }: { tags: string[]; onChange: (tags: string
         <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
           placeholder="Add tags (e.g., new, sale, featured)" className="input flex-1" />
-        <button onClick={addTag} className="btn btn-secondary">Add</button>
+        <button type="button" onClick={addTag} className="btn btn-secondary">Add</button>
       </div>
       <div className="flex flex-wrap gap-2 mt-3">
         {tags.map(tag => (
           <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-full text-sm">
             {tag}
-            <button onClick={() => onChange(tags.filter(t => t !== tag))} className="text-muted hover:text-red-500">
+            <button type="button" onClick={() => onChange(tags.filter(t => t !== tag))} className="text-muted hover:text-red-500">
               <HiOutlineX className="w-3 h-3" />
             </button>
           </span>
@@ -346,7 +441,7 @@ const TagsInput = ({ tags, onChange }: { tags: string[]; onChange: (tags: string
 export default function AddProductPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const editId = searchParams.get('id'); // 👈 if present, we're editing
+  const editId = searchParams.get('id');
   const isEditing = !!editId;
 
   const [formData, setFormData] = useState<ProductFormData>({
@@ -366,6 +461,7 @@ export default function AddProductPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingProduct, setIsLoadingProduct] = useState(isEditing);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);  // ← new
 
   const sections = [
     { id: 'basic', label: 'Basic Information', icon: HiOutlinePencilAlt },
@@ -377,26 +473,24 @@ export default function AddProductPage() {
     { id: 'seo', label: 'SEO', icon: HiOutlineGlobeAlt },
   ];
 
-  // ── Load real categories from Supabase ────────────────────
+  // ── Load categories ───────────────────────────────────────
   useEffect(() => {
     const loadCategories = async () => {
-      const { data } = await getCategories();
+      const { data, error } = await getCategories();
+      if (error) { console.error('Failed to load categories:', error); return; }
       if (data) setCategories(data);
     };
     loadCategories();
   }, []);
 
-  // ── If editing, load the existing product ─────────────────
+  // ── Load product for editing ──────────────────────────────
   useEffect(() => {
     if (!editId) return;
-
     const loadProduct = async () => {
       setIsLoadingProduct(true);
       try {
         const { data, error } = await getProductById(editId);
         if (error || !data) throw new Error(error ?? 'Product not found');
-
-        // Map DB fields → form fields
         setFormData({
           name: data.name,
           description: data.description ?? '',
@@ -410,17 +504,11 @@ export default function AddProductPage() {
           lowStockAlert: data.low_stock_alert,
           hasVariants: data.has_variants,
           variantOptions: (data.variant_options ?? []).map((opt: any) => ({
-            id: opt.id,
-            name: opt.name,
-            values: opt.values,
+            id: opt.id, name: opt.name, values: opt.values,
           })),
           variants: (data.variants ?? []).map((v: any) => ({
-            id: v.id,
-            options: v.options,
-            price: v.price,
-            sku: v.sku ?? '',
-            stock: v.stock,
-            comparePrice: v.compare_price ?? undefined,
+            id: v.id, options: v.options, price: v.price,
+            sku: v.sku ?? '', stock: v.stock, comparePrice: v.compare_price ?? undefined,
           })),
           categoryId: data.category_id ?? '',
           tags: data.tags ?? [],
@@ -435,12 +523,8 @@ export default function AddProductPage() {
           seoDescription: data.seo_description ?? '',
           slug: data.slug ?? '',
         });
-
-        // Load existing images
         setImages((data.images ?? []).map((img: any) => ({
-          id: img.id,
-          url: img.url,
-          isFeatured: img.is_featured,
+          id: img.id, url: img.url, isFeatured: img.is_featured,
         })));
       } catch (err: any) {
         console.error('Failed to load product:', err);
@@ -450,11 +534,10 @@ export default function AddProductPage() {
         setIsLoadingProduct(false);
       }
     };
-
     loadProduct();
   }, [editId]);
 
-  // ── Auto-generate slug from name ──────────────────────────
+  // ── Auto-generate slug ────────────────────────────────────
   useEffect(() => {
     if (formData.name && !formData.slug) {
       const slug = formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -471,11 +554,9 @@ export default function AddProductPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ── Save handler — creates or updates ─────────────────────
   const handleSave = async (publish: boolean = false) => {
     if (!validateForm()) return;
     setIsSaving(true);
-
     try {
       const input = {
         name: formData.name,
@@ -503,7 +584,6 @@ export default function AddProductPage() {
         seo_description: formData.seoDescription || undefined,
       };
 
-      // Only save images that have real URLs (not blob: from local files)
       const savedImages = images
         .filter(img => !img.url.startsWith('blob:'))
         .map((img, i) => ({ url: img.url, is_featured: img.isFeatured, position: i }));
@@ -514,41 +594,26 @@ export default function AddProductPage() {
 
       const variants = formData.hasVariants
         ? formData.variants.map(v => ({
-            options: v.options,
-            price: v.price,
-            compare_price: v.comparePrice,
-            sku: v.sku || undefined,
-            stock: v.stock,
+            options: v.options, price: v.price,
+            compare_price: v.comparePrice, sku: v.sku || undefined, stock: v.stock,
           }))
         : [];
 
       if (isEditing && editId) {
-        // ── UPDATE ────────────────────────────────────────────
         const { error } = await updateProduct(editId, input);
         if (error) throw new Error(error);
-
-        // Replace images and variants
         await replaceProductImages(editId, savedImages);
         await replaceProductVariants(editId, variantOptions, variants);
-
         router.push('/dashboard/products');
       } else {
-        // ── CREATE ────────────────────────────────────────────
         const { data, error } = await createProduct({
           ...input,
           image_urls: savedImages.map(img => img.url),
           variant_options: variantOptions,
           variants,
         });
-
         if (error) throw new Error(error);
-
-        if (publish) {
-          router.push('/dashboard/products');
-        } else {
-          alert('Product saved as draft!');
-          router.push('/dashboard/products');
-        }
+        router.push('/dashboard/products');
       }
     } catch (err: any) {
       console.error('Failed to save product:', err);
@@ -562,6 +627,13 @@ export default function AddProductPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field as string]) setErrors(prev => ({ ...prev, [field]: '' }));
   };
+
+  // ── Called when a new category is created inline ──────────
+  const handleCategoryCreated = (category: Category) => {
+    setCategories(prev => [...prev, category])  // add to dropdown
+    updateForm('categoryId', category.id)        // auto-select it
+    setIsCategoryModalOpen(false)
+  }
 
   if (isLoadingProduct) {
     return (
@@ -583,7 +655,6 @@ export default function AddProductPage() {
             <div className="flex items-center gap-2 text-sm text-muted mb-1">
               <Link href="/dashboard/products" className="hover:text-brand-500">Products</Link>
               <span>/</span>
-              {/* ✅ Title changes based on mode */}
               <span>{isEditing ? 'Edit Product' : 'Add Product'}</span>
             </div>
             <h1 className="text-2xl font-semibold">{isEditing ? 'Edit Product' : 'Add Product'}</h1>
@@ -608,11 +679,11 @@ export default function AddProductPage() {
         </div>
       </div>
 
-      {/* Main Content — Two Column Layout (identical to your original) */}
       <div className="max-w-[1600px] mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left Column */}
           <div className="flex-1 space-y-6">
+
             {/* Basic Information */}
             <div className="card">
               <h2 className="text-lg font-semibold mb-4">Basic Information</h2>
@@ -723,21 +794,52 @@ export default function AddProductPage() {
             </div>
 
             {/* Categories & Tags */}
-            <div className="card">
+            <div className="card" id="categories">
               <h2 className="text-lg font-semibold mb-4">Categories & Tags</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Category <span className="text-red-500">*</span></label>
-                  {/* ✅ Real categories from Supabase */}
-                  <select value={formData.categoryId} onChange={(e) => updateForm('categoryId', e.target.value)}
-                    className={`input ${errors.category ? 'border-red-500' : ''}`}>
-                    <option value="">Select a category</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                  {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
+                  <label className="block text-sm font-medium mb-1">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+
+                  {/* ── Category selector + inline create button ── */}
+                  <div className="flex gap-2">
+                    <select
+                      value={formData.categoryId}
+                      onChange={(e) => updateForm('categoryId', e.target.value)}
+                      className={`input flex-1 ${errors.category ? 'border-red-500' : ''}`}
+                    >
+                      <option value="">
+                        {categories.length === 0 ? 'No categories yet — create one →' : 'Select a category'}
+                      </option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      className="btn btn-secondary flex-shrink-0"
+                      title="Create new category"
+                    >
+                      <HiOutlinePlus className="w-4 h-4" />
+                      New
+                    </button>
+                  </div>
+
+                  {errors.category && (
+                    <p className="text-xs text-red-500 mt-1">{errors.category}</p>
+                  )}
+
+                  {/* Empty state hint */}
+                  {categories.length === 0 && (
+                    <p className="text-xs text-muted mt-2 flex items-center gap-1">
+                      <HiOutlineExclamationCircle className="w-3.5 h-3.5 text-amber-500" />
+                      You don't have any categories yet. Click <strong>New</strong> to create your first one.
+                    </p>
+                  )}
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Tags</label>
                   <TagsInput tags={formData.tags} onChange={(tags) => updateForm('tags', tags)} />
@@ -822,6 +924,12 @@ export default function AddProductPage() {
                   <p className="font-medium">${formData.price.toFixed(2)}</p>
                 </div>
                 <div>
+                  <p className="text-xs text-muted">Category</p>
+                  <p className="font-medium">
+                    {categories.find(c => c.id === formData.categoryId)?.name || 'None selected'}
+                  </p>
+                </div>
+                <div>
                   <p className="text-xs text-muted">Status</p>
                   <div className="flex items-center gap-2 mt-1">
                     <select value={formData.status} onChange={(e) => updateForm('status', e.target.value as ProductStatus)}
@@ -830,7 +938,7 @@ export default function AddProductPage() {
                       <option value="active">Active</option>
                       <option value="archived">Archived</option>
                     </select>
-                    <button onClick={() => updateForm('visibility', formData.visibility === 'public' ? 'hidden' : 'public')}
+                    <button type="button" onClick={() => updateForm('visibility', formData.visibility === 'public' ? 'hidden' : 'public')}
                       className="p-1.5 rounded-md hover:bg-gray-100"
                       title={formData.visibility === 'public' ? 'Make hidden' : 'Make public'}>
                       {formData.visibility === 'public' ?
@@ -873,6 +981,15 @@ export default function AddProductPage() {
           </div>
         </div>
       </div>
+
+      {/* Create Category Modal */}
+      <AnimatePresence>
+        <CreateCategoryModal
+          isOpen={isCategoryModalOpen}
+          onClose={() => setIsCategoryModalOpen(false)}
+          onCreated={handleCategoryCreated}
+        />
+      </AnimatePresence>
     </div>
   );
 }

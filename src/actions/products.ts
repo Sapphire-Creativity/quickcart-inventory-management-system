@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@clerk/nextjs/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -67,7 +68,7 @@ export interface Category {
 }
 
 export type ProductVariantInput = {
-  options: Record<string, string>; // e.g. { color: 'red', size: 'M' }
+  options: Record<string, string>;
   price: number;
   compare_price?: number;
   sku?: string;
@@ -75,8 +76,8 @@ export type ProductVariantInput = {
 };
 
 export type ProductVariantOptionInput = {
-  name: string; // e.g. "Color"
-  values: string[]; // e.g. ["Red", "Blue", "Green"]
+  name: string;
+  values: string[];
   position?: number;
 };
 
@@ -104,7 +105,6 @@ export type CreateProductInput = {
   shipping_class?: ShippingClass;
   seo_title?: string;
   seo_description?: string;
-  // Related data (created alongside the product)
   variants?: ProductVariantInput[];
   variant_options?: ProductVariantOptionInput[];
   image_urls?: string[];
@@ -120,25 +120,25 @@ export type GetProductsOptions = {
   search?: string;
   status?: ProductStatus;
   category_id?: string;
-  low_stock?: boolean; // filter products at or below low_stock_alert threshold
+  low_stock?: boolean;
 };
 
 // ── Actions ────────────────────────────────────────────────
 
-/**
- * Create a new product, with optional variants, variant options, and images.
- * All inserts are run together so a failure doesn't leave partial data.
- */
 export async function createProduct(input: CreateProductInput) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
-  // Generate a slug from the name if not provided
   const slug =
     input.slug ??
     input.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
+      .replace(/(^-|-$)/g, "") +
+      "-" +
+      Math.random().toString(36).slice(2, 6);
 
   const { data: product, error: productError } = await supabase
     .from("products")
@@ -166,6 +166,7 @@ export async function createProduct(input: CreateProductInput) {
       shipping_class: input.shipping_class ?? "standard",
       seo_title: input.seo_title ?? null,
       seo_description: input.seo_description ?? null,
+      user_id: userId, // ← tenant stamp
     })
     .select()
     .single();
@@ -175,7 +176,6 @@ export async function createProduct(input: CreateProductInput) {
     return { data: null, error: productError.message };
   }
 
-  // Insert variant options (e.g. Color: [Red, Blue], Size: [S, M, L])
   if (input.variant_options && input.variant_options.length > 0) {
     const { error } = await supabase.from("product_variant_options").insert(
       input.variant_options.map((opt, i) => ({
@@ -183,12 +183,12 @@ export async function createProduct(input: CreateProductInput) {
         name: opt.name,
         values: opt.values,
         position: opt.position ?? i,
+        user_id: userId, // ← tenant stamp
       })),
     );
     if (error) console.error("[createProduct] variant_options", error);
   }
 
-  // Insert variants (each combination of options with its own price/stock)
   if (input.variants && input.variants.length > 0) {
     const { error } = await supabase.from("product_variants").insert(
       input.variants.map((v) => ({
@@ -198,32 +198,33 @@ export async function createProduct(input: CreateProductInput) {
         compare_price: v.compare_price ?? null,
         sku: v.sku ?? null,
         stock: v.stock,
+        user_id: userId,f
       })),
     );
     if (error) console.error("[createProduct] variants", error);
   }
 
-  // Insert images
   if (input.image_urls && input.image_urls.length > 0) {
     const { error } = await supabase.from("product_images").insert(
       input.image_urls.map((url, i) => ({
         product_id: product.id,
         url,
-        is_featured: i === 0, // first image is the featured one
+        is_featured: i === 0,
         position: i,
+        user_id: userId, // ← tenant stamp
       })),
     );
     if (error) console.error("[createProduct] images", error);
   }
 
-  revalidatePath("/products");
+  revalidatePath("/dashboard/products");
   return { data: product, error: null };
 }
 
-/**
- * Get a paginated, filterable list of products.
- */
 export async function getProducts(options: GetProductsOptions = {}) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized", count: 0 };
+
   const supabase = await createServerClient();
   const {
     page = 1,
@@ -242,6 +243,7 @@ export async function getProducts(options: GetProductsOptions = {}) {
       "*, categories(id, name), product_images(id, url, is_featured, position)",
       { count: "exact" },
     )
+    .eq("user_id", userId) // ← tenant filter
     .neq("status", "archived")
     .order("created_at", { ascending: false })
     .range(from, to);
@@ -251,15 +253,8 @@ export async function getProducts(options: GetProductsOptions = {}) {
       `name.ilike.%${search}%,sku.ilike.%${search}%,vendor.ilike.%${search}%`,
     );
   }
-
-  if (status) {
-    query = query.eq("status", status);
-  }
-
-  if (category_id) {
-    query = query.eq("category_id", category_id);
-  }
-
+  if (status) query = query.eq("status", status);
+  if (category_id) query = query.eq("category_id", category_id);
   if (low_stock) {
     query = query
       .filter("stock", "lte", "low_stock_alert")
@@ -281,10 +276,10 @@ export async function getProducts(options: GetProductsOptions = {}) {
   };
 }
 
-/**
- * Get a single product by ID with all related data.
- */
 export async function getProductById(id: string) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   const [productResult, variantsResult, variantOptionsResult, imagesResult] =
@@ -293,24 +288,28 @@ export async function getProductById(id: string) {
         .from("products")
         .select("*, categories(id, name)")
         .eq("id", id)
+        .eq("user_id", userId) // ← tenant filter
         .single(),
 
       supabase
         .from("product_variants")
         .select("*")
         .eq("product_id", id)
+        .eq("user_id", userId) // ← tenant filter
         .order("created_at", { ascending: true }),
 
       supabase
         .from("product_variant_options")
         .select("*")
         .eq("product_id", id)
+        .eq("user_id", userId) // ← tenant filter
         .order("position", { ascending: true }),
 
       supabase
         .from("product_images")
         .select("*")
         .eq("product_id", id)
+        .eq("user_id", userId) // ← tenant filter
         .order("position", { ascending: true }),
     ]);
 
@@ -330,11 +329,10 @@ export async function getProductById(id: string) {
   };
 }
 
-/**
- * Update a product's core fields.
- * To update variants or images, use the dedicated actions below.
- */
 export async function updateProduct(id: string, input: UpdateProductInput) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   const updates: Record<string, unknown> = {};
@@ -365,15 +363,14 @@ export async function updateProduct(id: string, input: UpdateProductInput) {
   ] as const;
 
   for (const field of fields) {
-    if (input[field] !== undefined) {
-      updates[field] = input[field];
-    }
+    if (input[field] !== undefined) updates[field] = input[field];
   }
 
   const { data, error } = await supabase
     .from("products")
     .update(updates)
     .eq("id", id)
+    .eq("user_id", userId) // ← tenant filter
     .select()
     .single();
 
@@ -382,44 +379,36 @@ export async function updateProduct(id: string, input: UpdateProductInput) {
     return { data: null, error: error.message };
   }
 
-  revalidatePath("/products");
-  revalidatePath(`/products/${id}`);
+  revalidatePath("/dashboard/products");
+  revalidatePath(`/dashboard/products/${id}`);
   return { data, error: null };
 }
 
-/**
- * Soft-delete a product by setting status to 'archived'.
- * The product disappears from the catalog but historical order_items
- * that reference it remain intact.
- */
 export async function deleteProduct(id: string) {
+  const { userId } = await auth();
+  if (!userId) return { error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("products")
     .update({ status: "archived" })
     .eq("id", id)
-    .select()
-    .single();
+    .eq("user_id", userId); // ← tenant filter
 
   if (error) {
     console.error("[deleteProduct]", error);
     return { error: error.message };
   }
 
-  revalidatePath("/products");
+  revalidatePath("/dashboard/products");
   return { error: null };
 }
 
 /**
- * Adjust stock for a product or a specific variant.
- * Pass a positive delta to add stock, negative to decrement.
- *
- * Used internally by the orders module — not called directly from UI.
- *
- * Examples:
- *   adjustStock({ productId: '...' }, -2)   // sold 2 units
- *   adjustStock({ variantId: '...' }, 5)    // restocked 5 units
+ * Adjust stock for a product or variant.
+ * Called internally by orders — no tenant filter needed here since
+ * the order action already validated ownership before calling this.
  */
 export async function adjustStock(
   target: { productId: string; variantId?: string },
@@ -428,7 +417,6 @@ export async function adjustStock(
   const supabase = await createServerClient();
 
   if (target.variantId) {
-    // Adjust stock on a specific variant
     const { data: variant, error: fetchError } = await supabase
       .from("product_variants")
       .select("stock")
@@ -445,7 +433,6 @@ export async function adjustStock(
 
     if (error) return { error: error.message };
   } else {
-    // Adjust stock on the base product
     const { data: product, error: fetchError } = await supabase
       .from("products")
       .select("stock")
@@ -466,14 +453,37 @@ export async function adjustStock(
   return { error: null };
 }
 
-//  ─────────────────
+export async function createCategory(name: string) {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized" };
+
+  const supabase = await createServerClient();
+
+  const { data, error } = await supabase
+    .from("categories")
+    .insert({ name, user_id: userId })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[createCategory]", error);
+    return { data: null, error: error.message };
+  }
+
+  revalidatePath("/dashboard/products");
+  return { data: data as Category, error: null };
+}
 
 export async function getCategories() {
+  const { userId } = await auth();
+  if (!userId) return { data: null, error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("categories")
     .select("id, name, parent_id")
+    .eq("user_id", userId) // ← tenant filter
     .order("name");
 
   if (error) {
@@ -488,14 +498,25 @@ export async function replaceProductImages(
   productId: string,
   images: { url: string; is_featured: boolean; position: number }[],
 ) {
+  const { userId } = await auth();
+  if (!userId) return { error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
-  await supabase.from("product_images").delete().eq("product_id", productId);
+  await supabase
+    .from("product_images")
+    .delete()
+    .eq("product_id", productId)
+    .eq("user_id", userId); // ← tenant filter
 
   if (images.length > 0) {
-    const { error } = await supabase
-      .from("product_images")
-      .insert(images.map((img) => ({ ...img, product_id: productId })));
+    const { error } = await supabase.from("product_images").insert(
+      images.map((img) => ({
+        ...img,
+        product_id: productId,
+        user_id: userId, // ← tenant stamp
+      })),
+    );
     if (error) {
       console.error("[replaceProductImages]", error);
       return { error: error.message };
@@ -511,13 +532,22 @@ export async function replaceProductVariants(
   options: ProductVariantOptionInput[],
   variants: ProductVariantInput[],
 ) {
+  const { userId } = await auth();
+  if (!userId) return { error: "Unauthorized" };
+
   const supabase = await createServerClient();
 
   await supabase
     .from("product_variant_options")
     .delete()
-    .eq("product_id", productId);
-  await supabase.from("product_variants").delete().eq("product_id", productId);
+    .eq("product_id", productId)
+    .eq("user_id", userId); // ← tenant filter
+
+  await supabase
+    .from("product_variants")
+    .delete()
+    .eq("product_id", productId)
+    .eq("user_id", userId); // ← tenant filter
 
   if (options.length > 0) {
     const { error } = await supabase.from("product_variant_options").insert(
@@ -526,6 +556,7 @@ export async function replaceProductVariants(
         name: opt.name,
         values: opt.values,
         position: opt.position ?? i,
+        user_id: userId, // ← tenant stamp
       })),
     );
     if (error) console.error("[replaceProductVariants] options", error);
@@ -540,6 +571,7 @@ export async function replaceProductVariants(
         compare_price: v.compare_price ?? null,
         sku: v.sku ?? null,
         stock: v.stock,
+        user_id: userId, // ← tenant stamp
       })),
     );
     if (error) console.error("[replaceProductVariants] variants", error);

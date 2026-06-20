@@ -1,30 +1,38 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogOut, ShoppingCart, X } from '@/components/icons'
-import { useClerk } from '@clerk/nextjs'
+import { LogOut, X } from '@/components/icons'
+import { useUser, useClerk } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 interface SignOutModalProps {
     isOpen: boolean
     onClose: () => void
-    user: {
-        name: string
-        email: string
-        avatar: string
-    }
 }
 
-export function SignOutModal({ isOpen, onClose, user }: SignOutModalProps) {
+export function SignOutModal({ isOpen, onClose }: SignOutModalProps) {
+    const { user } = useUser()
     const { signOut } = useClerk()
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
 
+    // ── Real data from Clerk ──────────────────────────────────
+    const storeName = (user?.unsafeMetadata?.store_name as string) ?? 'My Store'
+    const displayEmail = user?.primaryEmailAddress?.emailAddress ?? ''
+    const displayAvatar = user?.imageUrl ?? null
+    const displayName = user?.fullName ?? user?.firstName ?? user?.username ?? 'Admin'
+    const initials = displayName
+        .split(' ')
+        .map((n: string) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+
     const handleSignOut = async () => {
         setIsLoading(true)
         await signOut()
-        router.replace('/auth') // change to your sign-in route
+        router.replace('/')
     }
 
     return (
@@ -73,27 +81,28 @@ export function SignOutModal({ isOpen, onClose, user }: SignOutModalProps) {
 
                             {/* Text */}
                             <div className="text-center mb-6">
-                                <h2 className="text-lg font-bold text-neutral-900 mb-1">
-                                    Sign out?
-                                </h2>
-                                <p className="text-sm text-neutral-500">
-                                    You're signing out of your account
-                                </p>
+                                <h2 className="text-lg font-bold text-neutral-900 mb-1">Sign out?</h2>
+                                <p className="text-sm text-neutral-500">You're signing out of your account</p>
                             </div>
 
                             {/* User pill */}
                             <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-50
                               border border-neutral-200/60 mb-6">
-                                <img
-                                    src={user.avatar}
-                                    alt={user.name}
-                                    className="w-9 h-9 rounded-xl object-cover ring-2 ring-neutral-100"
-                                />
+                                {displayAvatar ? (
+                                    <img
+                                        src={displayAvatar}
+                                        alt={storeName}
+                                        className="w-9 h-9 rounded-xl object-cover ring-2 ring-neutral-100 flex-shrink-0"
+                                    />
+                                ) : (
+                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600
+                                  flex items-center justify-center ring-2 ring-neutral-100 flex-shrink-0">
+                                        <span className="text-white text-xs font-bold">{initials}</span>
+                                    </div>
+                                )}
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-neutral-800 truncate">
-                                        {user.name}
-                                    </p>
-                                    <p className="text-xs text-neutral-400 truncate">{user.email}</p>
+                                    <p className="text-sm font-semibold text-neutral-800 truncate">{storeName}</p>
+                                    <p className="text-xs text-neutral-400 truncate">{displayEmail}</p>
                                 </div>
                             </div>
 
@@ -123,10 +132,7 @@ export function SignOutModal({ isOpen, onClose, user }: SignOutModalProps) {
                                     {isLoading ? (
                                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                     ) : (
-                                        <>
-                                            <LogOut size={15} />
-                                            Sign Out
-                                        </>
+                                        <><LogOut size={15} /> Sign Out</>
                                     )}
                                 </motion.button>
                             </div>

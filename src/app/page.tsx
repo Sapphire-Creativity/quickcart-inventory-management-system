@@ -136,6 +136,9 @@ export default function AdminAuthPage() {
           password: data.password,
           firstName: data.fullName.split(' ')[0],
           lastName: data.fullName.split(' ').slice(1).join(' '),
+          unsafeMetadata: {
+            storeName: data.storeName
+          }
         })
 
         if (error) {
@@ -335,7 +338,7 @@ export default function AdminAuthPage() {
                           {errors.agreeTerms && <p className="text-red-400 text-xs mt-1">{errors.agreeTerms.message}</p>}
                         </div>
 
-                        
+
 
                         <SubmitButton isLoading={isSubmitting} label="Create Account" loadingLabel="Creating Account..." />
                         <p className="text-white/50 text-sm text-center">

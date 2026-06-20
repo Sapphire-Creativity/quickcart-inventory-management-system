@@ -34,7 +34,7 @@ export function StatCard({
   const isPositive = change > 0;
 
   return (
-    <div className={`relative group bg-gradient-to-br ${variants[variant]} border rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5`}>
+    <div className={`card relative group bg-gradient-to-br ${variants[variant]} border rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5`}>
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-white/10 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
