@@ -73,7 +73,7 @@ export async function getCustomers(options: GetCustomersOptions = {}) {
   let query = supabase
     .from("customer_metrics")
     .select("*", { count: "exact" })
-    .eq("user_id", userId)                      // ← tenant filter ✓
+    .eq("user_id", userId) // ← tenant filter ✓
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -113,14 +113,14 @@ export async function getCustomerById(id: string) {
       .from("customer_metrics")
       .select("*")
       .eq("id", id)
-      .eq("user_id", userId)                    // ← was missing, now fixed ✓
+      .eq("user_id", userId) // ← was missing, now fixed ✓
       .single(),
 
     supabase
       .from("orders")
       .select("id, order_number, status, payment_status, total, created_at")
       .eq("customer_id", id)
-      .eq("user_id", userId)                    // ← tenant filter ✓
+      .eq("user_id", userId) // ← tenant filter ✓
       .order("created_at", { ascending: false })
       .limit(10),
   ]);
@@ -151,10 +151,10 @@ export async function createCustomer(input: CreateCustomerInput) {
       name: input.name,
       email: input.email ?? null,
       phone: input.phone,
-      address: input.address ?? null,
+      address: (input.address ?? null) as any, // ← cast to any
       status: input.status ?? "active",
       notes: input.notes ?? null,
-      user_id: userId,                          // ← moved inside insert object ✓
+      user_id: userId,
     })
     .select()
     .single();
@@ -180,12 +180,12 @@ export async function updateCustomer(id: string, input: UpdateCustomerInput) {
       ...(input.name !== undefined && { name: input.name }),
       ...(input.email !== undefined && { email: input.email }),
       ...(input.phone !== undefined && { phone: input.phone }),
-      ...(input.address !== undefined && { address: input.address }),
+      ...(input.address !== undefined && { address: input.address as any }), // ← cast to any
       ...(input.status !== undefined && { status: input.status }),
       ...(input.notes !== undefined && { notes: input.notes }),
     })
     .eq("id", id)
-    .eq("user_id", userId)                      // ← tenant filter ✓
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -208,7 +208,7 @@ export async function deleteCustomer(id: string) {
     .from("orders")
     .select("id", { count: "exact", head: true })
     .eq("customer_id", id)
-    .eq("user_id", userId)                      // ← tenant filter ✓
+    .eq("user_id", userId) // ← tenant filter ✓
     .neq("status", "cancelled");
 
   if (checkError) {
@@ -226,7 +226,7 @@ export async function deleteCustomer(id: string) {
     .from("customers")
     .delete()
     .eq("id", id)
-    .eq("user_id", userId);                     // ← tenant filter ✓
+    .eq("user_id", userId); // ← tenant filter ✓
 
   if (error) {
     console.error("[deleteCustomer]", error);
@@ -246,7 +246,7 @@ export async function searchCustomers(query: string) {
   const { data, error } = await supabase
     .from("customers")
     .select("*")
-    .eq("user_id", userId)                      // ← tenant filter ✓
+    .eq("user_id", userId) // ← tenant filter ✓
     .or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`)
     .limit(10);
 
