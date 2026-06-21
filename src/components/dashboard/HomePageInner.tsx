@@ -165,7 +165,8 @@ export default function HomePageInner() {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-emerald-950">
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-8"
+      >
         <div className="w-full max-w-6xl">
           <div className="grid lg:grid-cols-2 gap-8">
 
@@ -206,7 +207,8 @@ export default function HomePageInner() {
             <motion.div initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }} className="relative">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 rounded-3xl blur-2xl" />
-                <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl">
+                <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl overflow-hidden">
+
 
                   {/* Header */}
                   <div className="text-center mb-8">
@@ -288,7 +290,7 @@ export default function HomePageInner() {
                     ) : (
                       <motion.form key="signup" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                         transition={{ duration: 0.3 }} onSubmit={handleSubmit(onSubmit)}
-                        className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                        className="space-y-4">
 
                         <Controller name="fullName" control={control} render={({ field }) => (
                           <InputField {...field} label="Full Name" icon={HiOutlineUser}
