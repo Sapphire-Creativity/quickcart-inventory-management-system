@@ -1,12 +1,16 @@
 "use client";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// NavSection — Sidebar navigation group with animated items
-// ─────────────────────────────────────────────────────────────────────────────
-import React from "react";
+
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import type { NavItem } from "../../../types";
+
+type NavItem = {
+  label: string;
+  href?: string;
+  icon: React.ElementType;
+  badge?: string | number;
+  active?: boolean;
+}
 
 interface NavSectionProps {
   label: string;

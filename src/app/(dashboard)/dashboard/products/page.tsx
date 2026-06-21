@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiOutlineSearch, HiOutlinePlus, HiOutlineFilter,
@@ -30,8 +30,8 @@ const StatusBadge = ({ status, stock }: { status: ProductStatus; stock: number }
     return <span className="badge badge-danger">Out of Stock</span>;
   }
   const config: Record<string, { label: string; className: string }> = {
-    active:   { label: 'Active',   className: 'badge-success' },
-    draft:    { label: 'Draft',    className: 'badge-warning' },
+    active: { label: 'Active', className: 'badge-success' },
+    draft: { label: 'Draft', className: 'badge-warning' },
     archived: { label: 'Archived', className: 'bg-gray-100 text-gray-600' },
   };
   const { label, className } = config[status] ?? { label: status, className: 'badge-secondary' };

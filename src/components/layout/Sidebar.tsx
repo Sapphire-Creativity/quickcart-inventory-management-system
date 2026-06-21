@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { SignOutModal } from '@/components/ui/SignOutModal'
 import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
-import { useUser, useClerk } from '@clerk/nextjs';
+import { useUser } from '@clerk/nextjs';
 import {
   ChevronLeft, ChevronRight, LogOut, ShoppingCart,
   LayoutDashboard, Users, CreditCard,
@@ -37,7 +37,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+
   const pathname = usePathname();
   const [showSignOut, setShowSignOut] = useState(false);
 
@@ -237,7 +237,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <SignOutModal
         isOpen={showSignOut}
         onClose={() => setShowSignOut(false)}
-        onConfirm={() => signOut({ redirectUrl: '/' })}
       />
 
       <style jsx>{`

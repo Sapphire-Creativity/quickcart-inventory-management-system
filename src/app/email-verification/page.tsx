@@ -2,14 +2,12 @@
 
 import { useRef, useState, useEffect, KeyboardEvent, ClipboardEvent, ChangeEvent } from "react";
 import { useSignUp } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 59;
 
 export default function EmailVerificationPage() {
   const { signUp } = useSignUp();
-  const router = useRouter();
 
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
   const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
@@ -89,36 +87,36 @@ export default function EmailVerificationPage() {
   }
 
   /* ── Verify ── */
- async function handleVerify() {
-  if (!isFilled || status === "loading" || !signUp) return;
-  setStatus("loading");
-  setErrorMsg("");
+  async function handleVerify() {
+    if (!isFilled || status === "loading" || !signUp) return;
+    setStatus("loading");
+    setErrorMsg("");
 
-  try {
-    await signUp.verifications.verifyEmailCode({ code: digits.join("") });
+    try {
+      await signUp.verifications.verifyEmailCode({ code: digits.join("") });
 
-    if (signUp.status === "complete") {
-      await signUp.finalize({
-        navigate: ({ decorateUrl }) => {
-          const url = decorateUrl("/dashboard");
-          window.location.href = url;
-        },
-      });
-      setStatus("success");
-    } else {
-      setErrorMsg("Verification incomplete. Please try again.");
+      if (signUp.status === "complete") {
+        await signUp.finalize({
+          navigate: ({ decorateUrl }) => {
+            const url = decorateUrl("/dashboard");
+            window.location.href = url;
+          },
+        });
+        setStatus("success");
+      } else {
+        setErrorMsg("Verification incomplete. Please try again.");
+        setStatus("idle");
+      }
+    } catch (err: any) {
+      const msg: string = err.errors?.[0]?.longMessage ?? "Incorrect code. Please try again.";
+      setErrorMsg(msg);
+      setShake(true);
+      setTimeout(() => setShake(false), 400);
+      setDigits(Array(CODE_LENGTH).fill(""));
       setStatus("idle");
+      inputRefs.current[0]?.focus();
     }
-  } catch (err: any) {
-    const msg: string = err.errors?.[0]?.longMessage ?? "Incorrect code. Please try again.";
-    setErrorMsg(msg);
-    setShake(true);
-    setTimeout(() => setShake(false), 400);
-    setDigits(Array(CODE_LENGTH).fill(""));
-    setStatus("idle");
-    inputRefs.current[0]?.focus();
   }
-}
 
   /* ── Resend ── */
   async function handleResend() {

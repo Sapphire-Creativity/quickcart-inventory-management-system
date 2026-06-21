@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import { HiOutlineSearch, HiOutlinePhotograph } from 'react-icons/hi'

@@ -1,12 +1,11 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FiDollarSign, FiShoppingBag, FiClock } from 'react-icons/fi'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { DualStatCard } from '@/components/dashboard/DualStatCard'
 import { WeeklyReport } from '@/components/dashboard/WeeklyReport'
-import { UsersWidget } from '@/components/dashboard/UsersWidget'
 import { TopProducts } from '@/components/dashboard/TopProducts'
 import { TransactionsTable } from '@/components/dashboard/TransactionsTable'
 
@@ -122,10 +121,12 @@ export default function DashboardPage() {
               subtitle="Last 7 days"
               value={formatRevenue(stats?.revenue.thisWeek ?? 0)}
               valuePrefix="$"
+              valueSuffix=""
               change={stats?.revenue.weekOverWeekChange}
               changeLabel={`vs. previous 7 days ($${formatRevenue(stats?.revenue.lastWeek ?? 0)})`}
               icon={FiDollarSign}
               variant="success"
+              onDetails={() => { }}
             />
 
             {/* Total Orders */}
@@ -133,10 +134,13 @@ export default function DashboardPage() {
               title="Total Orders"
               subtitle="Last 7 days"
               value={stats?.orders.thisWeek.toLocaleString() ?? '0'}
+              valuePrefix=""                                    // ← add this
+              valueSuffix=""
               change={stats?.orders.weekOverWeekChange}
               changeLabel={`vs. previous 7 days (${stats?.orders.lastWeek ?? 0})`}
               icon={FiShoppingBag}
               variant="success"
+               onDetails={() => {}}   
             />
 
             {/* Pending & Cancelled */}
@@ -145,6 +149,7 @@ export default function DashboardPage() {
               subtitle="All time"
               icon={FiClock}
               variant="warning"
+              onDetails={() => {}} 
               stats={[
                 {
                   label: 'Pending',
@@ -167,7 +172,7 @@ export default function DashboardPage() {
         <WeeklyReport data={weeklyData} loading={loading} />
 
         <div className="flex flex-col gap-4">
-         
+
           <TopProducts products={topProducts} loading={loading} />
         </div>
       </motion.div>

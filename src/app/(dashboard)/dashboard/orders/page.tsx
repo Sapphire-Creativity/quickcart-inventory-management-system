@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect, useCallback, useTransition } from 'react'
+import { useState, useMemo, useEffect, useCallback, useTransition } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import KPICard from '@/components/dashboard/KPICard'
 import DashboardHeader from '@/components/dashboard/DashboardHeader'

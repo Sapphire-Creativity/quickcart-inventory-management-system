@@ -1,5 +1,4 @@
-import React from 'react'
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 const KPICard = ({ title, subtitle, value, icon: Icon, trend, color }: any) => (
     <motion.div

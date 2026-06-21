@@ -3,7 +3,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // SalesByCountry — Regional sales breakdown with animated progress bars
 // ─────────────────────────────────────────────────────────────────────────────
-import React from "react";
 import { motion } from "framer-motion";
 import { MoreVertical } from "@/components/icons";
 import { COUNTRY_SALES } from "@/constants";

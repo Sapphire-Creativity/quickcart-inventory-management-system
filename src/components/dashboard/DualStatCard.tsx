@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { FiTrendingUp, FiTrendingDown, FiInfo } from "react-icons/fi";
 
 export function DualStatCard({
@@ -10,6 +9,13 @@ export function DualStatCard({
     icon: Icon,
     variant = "warning",
     onDetails
+}: {
+    title: string
+    subtitle: string
+    stats: { label: string; value: string; change?: number; subtext?: string }[]
+    icon: React.ElementType
+    variant?: "default" | "warning" | "danger"
+    onDetails?: () => void
 }) {
     const variants = {
         default: "from-white to-neutral-50/50 border-neutral-200/60",

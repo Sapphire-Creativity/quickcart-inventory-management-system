@@ -1,9 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// DEALPORT — Inline SVG Icon Library
-// Zero external dependencies · Consistent 24×24 viewBox · Fully typed
-// ─────────────────────────────────────────────────────────────────────────────
-
-import React from "react";
 
 export interface IconProps {
   size?: number;

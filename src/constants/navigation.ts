@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// DEALPORT — Navigation Constants
-// ─────────────────────────────────────────────────────────────────────────────
+
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -16,8 +14,19 @@ import {
   ShieldCheck,
   Settings2,
 } from "@/components/icons";
-import type { NavSection } from "../../types";
 
+type NavItem = {
+  label: string;
+  href?: string;
+  icon: React.ElementType;
+  badge?: string | number;
+  active?: boolean;
+};
+
+type NavSection = {
+  label: string;
+  items: NavItem[];
+};
 export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Main menu",

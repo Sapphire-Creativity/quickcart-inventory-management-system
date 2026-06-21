@@ -1,13 +1,8 @@
 "use client";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UsersWidget — Real-time users in last 30 minutes card
-// ─────────────────────────────────────────────────────────────────────────────
-import React from "react";
+
 import { motion } from "framer-motion";
 import { MoreVertical } from "@/components/icons";
-import { UsersBarChart } from "@/components/charts";
-import { USERS_PER_MINUTE } from "@/constants";
 
 export function UsersWidget() {
   return (
@@ -37,7 +32,6 @@ export function UsersWidget() {
       </p>
       <p className="text-caption mb-3">active users per minute</p>
 
-      <UsersBarChart data={USERS_PER_MINUTE} />
     </motion.div>
   );
 }

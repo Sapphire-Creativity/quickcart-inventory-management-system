@@ -1,14 +1,29 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// DEALPORT — Dashboard Data Constants
-// ─────────────────────────────────────────────────────────────────────────────
-import type {
-  WeeklyDataPoint,
-  MinuteDataPoint,
-  WeeklyMetric,
-  Transaction,
-  Product,
-  CountrySalesData,
-} from "../../types";
+type WeeklyDataPoint = { day: string; value: number };
+type MinuteDataPoint = { t: string; v: number };
+type WeeklyMetric = { label: string; value: string; active?: boolean };
+type Transaction = {
+  id: number;
+  customerId: string;
+  orderDate: string;
+  status: string;
+  amount: string;
+};
+type Product = {
+  id: string;
+  name: string;
+  sku: string;
+  price: string;
+  emoji: string;
+  color: string;
+};
+type CountrySalesData = {
+  name: string;
+  value: string;
+  change: string;
+  trendUp: boolean;
+  flag: string;
+  barPercent: number;
+};
 
 export const THIS_WEEK_DATA: WeeklyDataPoint[] = [
   { day: "Sun", value: 15000 },

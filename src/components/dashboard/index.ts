@@ -1,4 +1,4 @@
-export { StatCard, TrendBadge } from "./StatCard";
+export { StatCard } from "./StatCard";
 export { WeeklyReport } from "./WeeklyReport";
 export { UsersWidget } from "./UsersWidget";
 export { SalesByCountry } from "./SalesByCountry";

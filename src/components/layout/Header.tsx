@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { FiSearch, FiBell, FiSun } from "react-icons/fi";
 
 const USER_PROFILE = {

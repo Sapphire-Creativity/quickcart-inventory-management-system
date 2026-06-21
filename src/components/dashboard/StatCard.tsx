@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { FiTrendingUp, FiTrendingDown, FiInfo } from "react-icons/fi";
 
 export function StatCard({
@@ -14,6 +13,17 @@ export function StatCard({
   icon: Icon,
   variant = "default",
   onDetails
+}: {
+  title: string
+  subtitle: string
+  value: string | number
+  valuePrefix?: string
+  valueSuffix?: string
+  change?: number
+  changeLabel?: string
+  icon: React.ElementType
+  variant?: "default" | "success" | "warning" | "danger" | "info"
+  onDetails?: () => void
 }) {
   const variants = {
     default: "from-white to-neutral-50/50 border-neutral-200/60",
@@ -31,7 +41,7 @@ export function StatCard({
     info: "bg-blue-100 text-blue-600",
   };
 
-  const isPositive = change > 0;
+  const isPositive = (change ?? 0) > 0;
 
   return (
     <div className={`card relative group bg-gradient-to-br ${variants[variant]} border rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5`}>

@@ -50,9 +50,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             className={cn(
               "input",
               inputSize === "sm" && "input-sm",
-              leftAdornment  && "!pl-9",
-              rightAdornment && "!pr-9",
-              error && "border-[var(--color-danger-500)] focus:!shadow-[0_0_0_3px_rgb(244_63_94/0.2)]",
+              !!leftAdornment  && "!pl-9",
+              !!leftAdornment  && "!pl-9",
+              !!error && "border-[var(--color-danger-500)] focus:!shadow-[0_0_0_3px_rgb(244_63_94/0.2)]",
               className
             )}
             {...props}
